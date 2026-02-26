@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { createMatchSchema, listMatchesQuerySchema } from "../validation/matches.js";
+import {
+  createMatchSchema,
+  listMatchesQuerySchema,
+} from "../validation/matches.js";
 import { db } from "../db/db.js";
 import { getMatchStatus } from "../utils/match-status.js";
 import { matches } from "../db/schema.js";
@@ -9,44 +12,44 @@ export const matchesRouter = Router();
 
 const MAX_LIMIT = 100;
 matchesRouter.get("/", async (req, res) => {
-    const parsed = listMatchesQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-        return res
-            .status(400)
-            .json({
-                error: "Invalid query parameters",
-                details: parsed.error.issues,
-            });
-    }
+  const parsed = listMatchesQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid query parameters",
+      details: parsed.error.issues,
+    });
+  }
 
-    const limit = Math.min(parsed.data.limit ?? 50, MAX_LIMIT);
+  const limit = Math.min(parsed.data.limit ?? 50, MAX_LIMIT);
 
-    try {
-        const data = await db.select().from(matches).orderBy(desc(matches.createdAt)).limit(limit);
-        res.json({ data });
-    } catch (error) {
-        res
-            .status(500)
-            .json({ error: "Failed to fetch matches", details: error.message });
-    }
+  try {
+    const data = await db
+      .select()
+      .from(matches)
+      .orderBy(desc(matches.createdAt))
+      .limit(limit);
+    res.json({ data });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ error: "Failed to fetch matches", details: error.message });
+  }
 });
 
 matchesRouter.post("/", async (req, res) => {
   const parsed = createMatchSchema.safeParse(req.body);
 
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({
-        error: "Invalid payload",
-        details: parsed.error.issues,
-      });
+    return res.status(400).json({
+      error: "Invalid payload",
+      details: parsed.error.issues,
+    });
   }
 
-    const {
+  const {
     data: { startTime, endTime, homeScore, awayScore },
   } = parsed;
-  
+
   try {
     const [event] = await db
       .insert(matches)
@@ -59,6 +62,10 @@ matchesRouter.post("/", async (req, res) => {
         status: getMatchStatus(startTime, endTime),
       })
       .returning();
+
+      if(res.app.locals.broadcastMatchCreated) {
+        res.app.locals.broadcastMatchCreated(event);
+      }
 
     res.status(201).json({ data: event });
   } catch (error) {
